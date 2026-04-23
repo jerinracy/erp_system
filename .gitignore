@@ -1,0 +1,68 @@
+# 🔐 Environment variables
+.env
+.env.*
+!.env.example
+
+# 🐍 Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 🧪 Virtual environment
+venv/
+env/
+.venv/
+
+# 📦 Django stuff
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# 🗄️ PostgreSQL (if any local dumps)
+*.sql
+
+# 📁 Media & static files (optional based on setup)
+media/
+staticfiles/
+
+# 📁 Migrations (optional — see note below)
+# apps/*/migrations/*
+# !apps/*/migrations/__init__.py
+
+# 🔑 Secret keys / credentials
+secrets.json
+
+# 🧰 IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 🐳 Docker (optional overrides)
+docker-compose.override.yml
+
+# 🧾 OS files
+.DS_Store
+Thumbs.db
+
+# 📊 Coverage / testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 🧱 Build files
+dist/
+build/
+*.egg-info/
+
+# 🪵 Logs
+logs/
+*.log
+
+# 🔄 Cache
+.cache/
+
+# 🧪 Temporary files
+*.tmp
+*.bak
