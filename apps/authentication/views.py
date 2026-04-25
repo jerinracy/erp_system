@@ -11,9 +11,9 @@ class RegisterView(APIView):
 
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "Company registered"}, status=201)
+            return Response({"message": "Company registered"}, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TestTenantView(APIView):

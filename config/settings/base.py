@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     # apps
     'apps.authentication',
     'apps.tenants',
+    'apps.inventory',
 ]
 
 MIDDLEWARE = [
