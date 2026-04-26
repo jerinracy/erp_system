@@ -11,6 +11,11 @@ class Tenant(TimeStampedModel):
 
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
+
+    business_type = models.CharField(max_length=100, blank=True, null=True)
+    logo = models.ImageField(upload_to="tenant_logos/", null=True, blank=True)
+    is_delete_requested = models.BooleanField(default=False)
+
     status = models.CharField(max_length=20,
                               choices=[('pending', 'Pending'),
                                        ('active', 'Active'),
