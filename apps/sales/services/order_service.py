@@ -3,10 +3,8 @@ from apps.inventory.models import Product
 from apps.sales.models import Order, OrderItem
 
 
-def create_order(user, items_data):
-    tenant = user.tenant
-
-    with transaction.atomic():  # critical
+def create_order(tenant, items_data):
+    with transaction.atomic():  # Critical section to ensure data integrity
         order = Order.objects.create(tenant=tenant)
 
         total_amount = 0
@@ -19,11 +17,9 @@ def create_order(user, items_data):
 
             quantity = item["quantity"]
 
-            # stock check
             if product.stock < quantity:
                 raise Exception(f"Not enough stock for {product.name}")
 
-            # deduct stock
             product.stock -= quantity
             product.save()
 

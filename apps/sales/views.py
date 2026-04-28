@@ -17,7 +17,7 @@ class OrderCreateView(APIView):
         if serializer.is_valid():
             try:
                 order = create_order(
-                    user=request.user,
+                    tenant=request.user.tenant,
                     items_data=serializer.validated_data
                 )
 
@@ -50,6 +50,42 @@ class OrderListView(APIView):
             })
 
         return Response(data)
+
+
+class PublicOrderCreateView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        # 🔥 must come from middleware
+        if not hasattr(request, "tenant"):
+            return Response({"error": "Unauthorized"}, status=401)
+
+        if not hasattr(request, "api_key"):
+            return Response({"error": "API key missing"}, status=401)
+
+        # 🔥 permission check
+        if not request.api_key.can_create_order:
+            return Response({"error": "Permission denied"}, status=403)
+
+        serializer = OrderItemInputSerializer(data=request.data, many=True)
+
+        if serializer.is_valid():
+            try:
+                order = create_order(
+                    tenant=request.tenant,
+                    items_data=serializer.validated_data
+                )
+
+                return Response(
+                    {"message": "Order created", "order_id": order.id},
+                    status=201
+                )
+
+            except Exception as e:
+                return Response({"error": str(e)}, status=400)
+
+        return Response(serializer.errors, status=400)
 
 
 class OrderDetailView(APIView):

@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     'apps.tenants',
     'apps.inventory',
     'apps.sales',
+    'apps.integrations',
 ]
 
 MIDDLEWARE = [
@@ -34,6 +35,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "apps.tenants.middleware.TenantMiddleware",
+    "apps.integrations.middleware.APIKeyMiddleware",
 ]
 
 ROOT_URLCONF = 'config.urls'
