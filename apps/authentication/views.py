@@ -1,14 +1,17 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from .serializers import RegisterSerializer
-from django.contrib.auth import get_user_model
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .serializers import CustomTokenObtainPairSerializer
 
-from .models import EmailVerification
-from apps.notifications.email_service import send_verification_email
+from apps.notifications.email_service import (
+    send_password_reset_email,
+    send_verification_email,
+)
+
+from .models import EmailVerification, PasswordReset
+from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer
 
 User = get_user_model()
 
@@ -23,7 +26,9 @@ class RegisterView(APIView):
 
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "Company registered"}, status=status.HTTP_201_CREATED)
+            return Response(
+                {"message": "Company registered"}, status=status.HTTP_201_CREATED
+            )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -32,10 +37,12 @@ class TestTenantView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({
-            "user": request.user.email,
-            "tenant": str(request.tenant),
-        })
+        return Response(
+            {
+                "user": request.user.email,
+                "tenant": str(request.tenant),
+            }
+        )
 
 
 class VerifyEmailView(APIView):
@@ -85,3 +92,57 @@ class ResendVerificationView(APIView):
         send_verification_email(user.email, verification.token)
 
         return Response({"message": "Verification link sent"})
+
+
+class RequestPasswordResetView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        email = request.data.get("email")
+
+        if not email:
+            return Response({"error": "Email is required"}, status=400)
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # security: don't reveal user existence
+            return Response({"message": "If account exists, reset link sent"})
+
+        reset = PasswordReset.objects.create(user=user)
+
+        send_password_reset_email(user.email, reset.token)
+
+        return Response({"message": "If account exists, reset link sent"})
+
+
+class ResetPasswordView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        token = request.query_params.get("token")
+        new_password = request.data.get("password")
+
+        if not token or not new_password:
+            return Response({"error": "Token and password required"}, status=400)
+
+        try:
+            reset = PasswordReset.objects.get(token=token)
+        except PasswordReset.DoesNotExist:
+            return Response({"error": "Invalid token"}, status=400)
+
+        if not reset.is_valid():
+            return Response({"error": "Token expired or already used"}, status=400)
+
+        # update password
+        user = reset.user
+        user.set_password(new_password)
+        user.save()
+
+        # mark used
+        reset.is_used = True
+        reset.save()
+
+        return Response({"message": "Password reset successful"})

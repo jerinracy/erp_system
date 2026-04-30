@@ -1,10 +1,11 @@
-from django.conf import settings
-from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.base_user import BaseUserManager
-from django.db import models
-from datetime import timedelta
-from django.utils import timezone
 import uuid
+from datetime import timedelta
+
+from django.conf import settings
+from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.utils import timezone
 
 
 # custom user model to use email instead of username
@@ -48,7 +49,7 @@ class User(AbstractUser):
         related_name="users",
         null=True,
         blank=True,
-        db_index=True
+        db_index=True,
     )
 
     full_name = models.CharField(max_length=255)
@@ -71,6 +72,27 @@ class EmailVerification(models.Model):
 
     def is_expired(self):
         return self.created_at < timezone.now() - timedelta(minutes=30)
+
+    def is_valid(self):
+        return not self.is_used and not self.is_expired()
+
+    def __str__(self):
+        return f"{self.user.email} - {self.token}"
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PasswordReset(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    def is_expired(self):
+        return self.created_at < timezone.now() - timedelta(minutes=15)
 
     def is_valid(self):
         return not self.is_used and not self.is_expired()

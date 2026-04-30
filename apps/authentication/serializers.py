@@ -1,10 +1,11 @@
-from rest_framework import serializers
 from django.db import transaction
-
-from .models import User, EmailVerification
-from apps.tenants.models import Tenant
-from apps.notifications.email_service import send_verification_email
+from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from apps.notifications.email_service import send_verification_email
+from apps.tenants.models import Tenant
+
+from .models import EmailVerification, User
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -18,15 +19,12 @@ class RegisterSerializer(serializers.Serializer):
         with transaction.atomic():  # ensures consistency
             # 🔹 Create tenant
             tenant = Tenant.objects.create(
-                name=company_name,
-                owner_email=validated_data["email"]
+                name=company_name, owner_email=validated_data["email"]
             )
 
             # 🔹 Create user
             user = User.objects.create_user(
-                **validated_data,
-                tenant=tenant,
-                role="admin"
+                **validated_data, tenant=tenant, role="admin"
             )
 
             # 🔹 Create email verification record
@@ -45,8 +43,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # 🔥 block unverified users
         if not user.is_verified:
-            raise serializers.ValidationError(
-                {"error": "Verify your email first"}
-            )
+            raise serializers.ValidationError({"error": "Verify your email first"})
 
         return data
