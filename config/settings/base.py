@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import timedelta
+import os
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -24,6 +25,7 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.sales',
     'apps.integrations',
+    'apps.notifications',
 ]
 
 MIDDLEWARE = [
@@ -98,3 +100,11 @@ SIMPLE_JWT = {
 
 # custom user model
 AUTH_USER_MODEL = 'authentication.User'
+
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS") == "True"
+
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
