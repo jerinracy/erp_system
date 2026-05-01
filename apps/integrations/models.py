@@ -48,6 +48,8 @@ class Webhook(models.Model):
 
     is_active = models.BooleanField(default=True)
 
+    secret = models.CharField(max_length=255, default=uuid.uuid4)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

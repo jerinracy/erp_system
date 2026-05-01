@@ -1,9 +1,12 @@
+import time
 from datetime import timedelta
 
 import requests
 from django.utils import timezone
 
 from apps.integrations.models import FailedWebhook, Webhook
+from apps.integrations.utils.payload import sanitize_payload
+from apps.integrations.utils.signature import generate_signature
 
 
 def trigger_webhook(event, data, tenant):
@@ -11,7 +14,24 @@ def trigger_webhook(event, data, tenant):
 
     for webhook in webhooks:
         try:
-            response = requests.post(webhook.url, json=data, timeout=5)
+            # 🔥 prepare payload
+            payload = sanitize_payload(data)
+
+            # 🔥 generate signature
+            signature = generate_signature(webhook.secret, payload)
+
+            # 🔥 optional timestamp (recommended)
+            timestamp = str(int(time.time()))
+
+            response = requests.post(
+                webhook.url,
+                json=payload,
+                headers={
+                    "X-Webhook-Signature": signature,
+                    "X-Webhook-Timestamp": timestamp,  # 🔥 NEW
+                },
+                timeout=5,
+            )
 
             if response.status_code >= 400:
                 raise Exception(f"Bad response: {response.status_code}")
@@ -21,7 +41,6 @@ def trigger_webhook(event, data, tenant):
                 webhook=webhook,
                 payload=data,
                 last_error=str(e),
-                next_retry_at=timezone.now()
-                + timedelta(minutes=1),  # retry after 1 min
+                next_retry_at=timezone.now() + timedelta(minutes=1),
                 status="pending",
             )
