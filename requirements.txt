@@ -1,0 +1,20 @@
+# Core web framework
+Django>=5.1,<6
+
+# REST API & authentication
+djangorestframework>=3.15,<4
+djangorestframework-simplejwt>=5.3,<6
+
+# Database
+psycopg2-binary>=2.9.9,<3
+
+# Async tasks
+celery>=5.3,<6
+redis>=5.0,<6
+
+# Configuration & HTTP clients
+python-dotenv>=1.0,<2
+requests>=2.31,<3
+
+# ImageField on Tenant.logo
+Pillow>=10.0,<12
