@@ -1,3 +1,33 @@
 from django.db import models
 
-# Create your models here.
+
+class Event(models.Model):
+    EVENT_TYPES = (("order.created", "Order Created"),)
+
+    tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+
+    payload = models.JSONField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.event_type} - {self.tenant.name}"
+
+
+class Rule(models.Model):
+    tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
+
+    event_type = models.CharField(max_length=50)
+
+    ACTION_CHOICES = (
+        ("send_sms", "Send SMS"),
+        ("send_email", "Send Email"),
+    )
+
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.event_type} → {self.action}"

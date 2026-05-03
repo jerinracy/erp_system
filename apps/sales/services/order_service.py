@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
+from apps.automation.services.event_service import create_event  # 🔥 NEW
 from apps.integrations.services.webhook_service import trigger_webhook
 from apps.inventory.models import Product
 from apps.sales.models import Order, OrderItem
@@ -25,9 +26,11 @@ def create_order(tenant, items_data):
             if product.stock < quantity:
                 raise ValidationError(f"Not enough stock for {product.name}")
 
+            # 🔥 stock update
             product.stock -= quantity
             product.save()
 
+            # 🔥 order item
             OrderItem.objects.create(
                 order=order, product=product, quantity=quantity, price=product.price
             )
@@ -37,9 +40,10 @@ def create_order(tenant, items_data):
         order.total_amount = total_amount
         order.save()
 
-        # safe webhook trigger
+        # 🔥 AFTER COMMIT: webhook + automation
         transaction.on_commit(
             lambda order_id=order.id, total=order.total_amount, tenant=tenant: (
+                # ✅ 1. webhook (external integration)
                 trigger_webhook(
                     event="order.created",
                     data={
@@ -47,7 +51,18 @@ def create_order(tenant, items_data):
                         "total_amount": float(total),
                     },
                     tenant=tenant,
-                )
+                ),
+                # ✅ 2. automation event (Celery)
+                create_event(
+                    event_type="order.created",
+                    payload={
+                        "order_id": order_id,
+                        "total_amount": float(total),
+                        "email": tenant.owner_email,
+                        "phone": tenant.phone_number,
+                    },
+                    tenant=tenant,
+                ),
             )
         )
 
