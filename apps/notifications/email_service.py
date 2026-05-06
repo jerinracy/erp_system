@@ -6,7 +6,12 @@ def send_verification_email(email, token):
     verify_url = f"{settings.BASE_URL}/api/auth/verify-email/?token={token}"
 
     subject = "Verify your account"
-    message = f"Click the link to verify your account:\n{verify_url}"
+
+    message = f"""
+Click the link below to verify your account:
+
+{verify_url}
+"""
 
     send_mail(
         subject,
@@ -44,16 +49,17 @@ ERP System Team
     )
 
 
-def send_invoice_email(email, payload):
-    subject = "Your Order Invoice"
+def send_low_stock_email(email, payload):
+    subject = "[ERP System] Low Stock Alert"
 
     message = f"""
-Your order has been placed successfully.
+Low stock detected.
 
-Order ID: {payload.get("order_id")}
-Total Amount: {payload.get("total_amount")}
+Product: {payload.get("product_name")}
+Remaining Stock: {payload.get("remaining_stock")}
+Threshold: {payload.get("threshold")}
 
-Thank you for your purchase!
+Please restock the product.
 """
 
     send_mail(

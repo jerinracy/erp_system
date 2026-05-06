@@ -18,12 +18,16 @@ class Event(models.Model):
 class Rule(models.Model):
     tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
 
-    event_type = models.CharField(max_length=50)
+    EVENT_TYPES = (
+        ("stock.low", "Low Stock"),
+    )
 
     ACTION_CHOICES = (
         ("send_sms", "Send SMS"),
         ("send_email", "Send Email"),
     )
+
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
 
     action = models.CharField(max_length=50, choices=ACTION_CHOICES)
 

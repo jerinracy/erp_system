@@ -25,6 +25,8 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.automation",
     "apps.analytics",
+    # swagger
+    "drf_yasg",
 ]
 
 MIDDLEWARE = [
