@@ -1,16 +1,15 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+
+from core.views import ERPAPIView
 
 from .models import Order
 from .serializers import OrderItemInputSerializer
 from .services.order_service import create_order
 
 
-class OrderCreateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class OrderCreateView(ERPAPIView):
     def post(self, request):
         serializer = OrderItemInputSerializer(data=request.data, many=True)
 
@@ -32,9 +31,7 @@ class OrderCreateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-class OrderListView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class OrderListView(ERPAPIView):
     def get(self, request):
         orders = Order.objects.filter(
             tenant=request.user.tenant
@@ -68,6 +65,9 @@ class PublicOrderCreateView(APIView):
         if not request.api_key.can_create_order:
             return Response({"error": "Permission denied"}, status=403)
 
+        if not request.tenant.is_subscription_active:
+            return Response({"error": "Subscription expired"}, status=403)
+
         serializer = OrderItemInputSerializer(data=request.data, many=True)
 
         if serializer.is_valid():
@@ -88,9 +88,7 @@ class PublicOrderCreateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-class OrderDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class OrderDetailView(ERPAPIView):
     def get(self, request, pk):
         try:
             order = Order.objects.get(
@@ -118,9 +116,7 @@ class OrderDetailView(APIView):
         })
 
 
-class InvoiceView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class InvoiceView(ERPAPIView):
     def get(self, request, pk):
         try:
             order = Order.objects.get(

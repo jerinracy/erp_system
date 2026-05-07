@@ -1,15 +1,13 @@
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
+
+from core.views import ERPAPIView
 
 from .models import APIKey, Webhook
 from .serializers import APIKeySerializer
 
 
-class APIKeyCreateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class APIKeyCreateView(ERPAPIView):
     def post(self, request):
         serializer = APIKeySerializer(data=request.data)
 
@@ -23,18 +21,14 @@ class APIKeyCreateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-class APIKeyListView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class APIKeyListView(ERPAPIView):
     def get(self, request):
         keys = APIKey.objects.filter(tenant=request.user.tenant)
         serializer = APIKeySerializer(keys, many=True)
         return Response(serializer.data)
 
 
-class APIKeyDeactivateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class APIKeyDeactivateView(ERPAPIView):
     def post(self, request, pk):
         try:
             key = APIKey.objects.get(id=pk, tenant=request.user.tenant)
@@ -47,9 +41,7 @@ class APIKeyDeactivateView(APIView):
         return Response({"message": "API key deactivated"})
 
 
-class CreateWebhookView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class CreateWebhookView(ERPAPIView):
     def post(self, request):
         url = request.data.get("url")
         event = request.data.get("event")

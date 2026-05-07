@@ -10,7 +10,11 @@ class RuleSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def validate_event_type(self, value):
-        if value != "order.created":
+        """
+        Ensure the event type is one of the supported automation events.
+        Currently we only support low stock alerts.
+        """
+        if value != "stock.low":
             raise serializers.ValidationError("Unsupported event type")
         return value
 

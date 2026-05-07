@@ -15,6 +15,7 @@ redis>=5.0,<6
 # Configuration & HTTP clients
 python-dotenv>=1.0,<2
 requests>=2.31,<3
+sslcommerz-lib==1.0
 
 # ImageField on Tenant.logo
 Pillow>=10.0,<12

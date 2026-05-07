@@ -40,6 +40,7 @@ urlpatterns = [
     path("api/integrations/", include("apps.integrations.urls")),
     path("api/automation/", include("apps.automation.urls")),
     path("api/analytics/", include("apps.analytics.urls")),
+    path("api/billing/", include("apps.billing.urls")),
     # Swagger UI
     path("swagger/", schema_view.with_ui("swagger", cache_timeout=0)),
     # Redoc (optional, cleaner UI)

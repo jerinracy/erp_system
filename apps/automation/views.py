@@ -1,14 +1,12 @@
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
+
+from core.views import ERPAPIView
 
 from .models import Rule
 from .serializers import RuleSerializer
 
 
-class RuleCreateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class RuleCreateView(ERPAPIView):
     def post(self, request):
         serializer = RuleSerializer(data=request.data)
 
@@ -19,18 +17,14 @@ class RuleCreateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-class RuleListView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class RuleListView(ERPAPIView):
     def get(self, request):
         rules = Rule.objects.filter(tenant=request.user.tenant)
         serializer = RuleSerializer(rules, many=True)
         return Response(serializer.data)
 
 
-class RuleUpdateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class RuleUpdateView(ERPAPIView):
     def put(self, request, pk):
         try:
             rule = Rule.objects.get(id=pk, tenant=request.user.tenant)
@@ -46,9 +40,7 @@ class RuleUpdateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-class RuleDeleteView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class RuleDeleteView(ERPAPIView):
     def delete(self, request, pk):
         try:
             rule = Rule.objects.get(id=pk, tenant=request.user.tenant)

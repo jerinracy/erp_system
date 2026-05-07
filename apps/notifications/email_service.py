@@ -69,3 +69,25 @@ Please restock the product.
         [email],
         fail_silently=False,
     )
+
+
+def send_subscription_expiry_email(
+    email,
+    expiry_date,
+):
+
+    send_mail(
+        subject="Subscription Expiring Soon",
+
+        message=(
+            f"Your subscription "
+            f"will expire on "
+            f"{expiry_date}"
+        ),
+
+        from_email=settings.DEFAULT_FROM_EMAIL,
+
+        recipient_list=[email],
+
+        fail_silently=False,
+    )

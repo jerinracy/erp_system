@@ -2,7 +2,9 @@ from django.db import models
 
 
 class Event(models.Model):
-    EVENT_TYPES = (("order.created", "Order Created"),)
+    EVENT_TYPES = (
+        ("stock.low", "Low Stock"),
+    )
 
     tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
     event_type = models.CharField(max_length=50, choices=EVENT_TYPES)

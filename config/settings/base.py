@@ -2,7 +2,12 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+load_dotenv(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-40hv#%!4e$rzpg3$b)%(bc)6v#01(2(br2b8ues_-)ds$!-v&_"
@@ -25,6 +30,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.automation",
     "apps.analytics",
+    "apps.billing",
     # swagger
     "drf_yasg",
 ]
@@ -120,3 +126,19 @@ CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"
 
 SMS_API_KEY = os.getenv("SMS_API_KEY")
 SMS_API_URL = os.getenv("SMS_API_URL", "https://api.sms.net.bd/sendsms")
+
+CELERY_BEAT_SCHEDULE = {
+    "notify-expiring-subscriptions": {
+        "task": ("apps.automation.tasks.notify_expiring_subscriptions"),
+        "schedule": crontab(hour=9, minute=0),
+    },
+    "expire-subscriptions": {
+        "task": ("apps.automation.tasks.expire_subscriptions"),
+        "schedule": crontab(hour=0, minute=0),
+    },
+}
+
+# SSLCOMMERZ
+SSLCOMMERZ_STORE_ID = os.getenv("SSLCOMMERZ_STORE_ID", "")
+SSLCOMMERZ_STORE_PASSWORD = os.getenv("SSLCOMMERZ_STORE_PASSWORD", "")
+SSLCOMMERZ_IS_SANDBOX = os.getenv("SSLCOMMERZ_IS_SANDBOX", "True").lower() == "true"

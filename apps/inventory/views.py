@@ -1,14 +1,13 @@
-from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+
+from core.views import ERPAPIView
+
 from .models import Product
 from .serializers import ProductSerializer
 
 
-class ProductCreateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class ProductCreateView(ERPAPIView):
     def post(self, request):
         serializer = ProductSerializer(data=request.data, context={"request": request})
 
@@ -19,9 +18,7 @@ class ProductCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ProductDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class ProductDetailView(ERPAPIView):
     def get(self, request, pk):
         try:
             product = Product.objects.get(
@@ -35,18 +32,14 @@ class ProductDetailView(APIView):
         return Response(serializer.data)
 
 
-class ProductListView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class ProductListView(ERPAPIView):
     def get(self, request):
         products = Product.objects.filter(tenant=request.user.tenant)  # Filter products by tenant
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data)
 
 
-class ProductUpdateView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class ProductUpdateView(ERPAPIView):
     def put(self, request, pk):
         try:
             product = Product.objects.get(
@@ -65,9 +58,7 @@ class ProductUpdateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class ProductDeleteView(APIView):
-    permission_classes = [IsAuthenticated]
-
+class ProductDeleteView(ERPAPIView):
     def delete(self, request, pk):
         try:
             product = Product.objects.get(
