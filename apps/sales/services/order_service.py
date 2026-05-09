@@ -15,6 +15,7 @@ def create_order(tenant, items_data):
         total_amount = 0
 
         low_stock_products = []
+        order_items = []
 
         for item in items_data:
 
@@ -46,21 +47,26 @@ def create_order(tenant, items_data):
 
                 product.low_stock_alert_sent = True
 
-            product.save()
+            product.save(
+                update_fields=["stock", "low_stock_alert_sent", "updated_at"]
+            )
 
-            # create order item
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=quantity,
-                price=product.price,
+            order_items.append(
+                OrderItem(
+                    order=order,
+                    product=product,
+                    quantity=quantity,
+                    price=product.price,
+                )
             )
 
             total_amount += product.price * quantity
 
+        OrderItem.objects.bulk_create(order_items)
+
         order.total_amount = total_amount
 
-        order.save()
+        order.save(update_fields=["total_amount"])
 
         # after transaction success
         def after_commit():

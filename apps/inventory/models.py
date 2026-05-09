@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.functions import Lower
 
 from core.models.base import TenantAwareModel, TimeStampedModel
 
@@ -10,6 +11,14 @@ class Category(TenantAwareModel):
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "name"],
+                name="category_tenant_name_idx",
+            ),
+        ]
 
 
 class Product(TenantAwareModel, TimeStampedModel):
@@ -26,3 +35,16 @@ class Product(TenantAwareModel, TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "name"],
+                name="product_tenant_name_idx",
+            ),
+            models.Index(Lower("name"), "tenant", name="product_tenant_lname_idx"),
+            models.Index(
+                fields=["tenant", "stock"],
+                name="product_tenant_stock_idx",
+            ),
+        ]

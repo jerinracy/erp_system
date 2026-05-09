@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -8,6 +10,14 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.notifications.email_service import (
     send_password_reset_email,
     send_verification_email,
+)
+from core.swagger import (
+    EmailRequestSerializer,
+    ErrorResponseSerializer,
+    LoginResponseSerializer,
+    MessageResponseSerializer,
+    PasswordResetRequestSerializer,
+    TenantContextSerializer,
 )
 
 from .models import EmailVerification, PasswordReset
@@ -19,8 +29,38 @@ User = get_user_model()
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
+    @swagger_auto_schema(
+        operation_summary="Log in",
+        operation_description=(
+            "Authenticate a verified user and return JWT tokens with current "
+            "subscription status."
+        ),
+        request_body=CustomTokenObtainPairSerializer,
+        responses={
+            200: LoginResponseSerializer,
+            400: ErrorResponseSerializer,
+            401: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
 
 class RegisterView(APIView):
+    @swagger_auto_schema(
+        operation_summary="Register a company",
+        operation_description=(
+            "Create a tenant, admin user, trial subscription, and send an email "
+            "verification link."
+        ),
+        request_body=RegisterSerializer,
+        responses={
+            201: MessageResponseSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
 
@@ -36,6 +76,11 @@ class RegisterView(APIView):
 class TestTenantView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_summary="Inspect authenticated tenant context",
+        responses={200: TenantContextSerializer},
+        tags=["Authentication"],
+    )
     def get(self, request):
         return Response(
             {
@@ -49,6 +94,23 @@ class VerifyEmailView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="Verify email",
+        manual_parameters=[
+            openapi.Parameter(
+                "token",
+                openapi.IN_QUERY,
+                description="Email verification token.",
+                required=True,
+                type=openapi.TYPE_STRING,
+            )
+        ],
+        responses={
+            200: MessageResponseSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
     def get(self, request):
         token = request.query_params.get("token")
 
@@ -76,6 +138,15 @@ class VerifyEmailView(APIView):
 
 
 class ResendVerificationView(APIView):
+    @swagger_auto_schema(
+        operation_summary="Resend email verification",
+        request_body=EmailRequestSerializer,
+        responses={
+            200: MessageResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
     def post(self, request):
         email = request.data.get("email")
 
@@ -98,6 +169,15 @@ class RequestPasswordResetView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="Request password reset",
+        request_body=EmailRequestSerializer,
+        responses={
+            200: MessageResponseSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
     def post(self, request):
         email = request.data.get("email")
 
@@ -121,6 +201,24 @@ class ResetPasswordView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="Reset password",
+        manual_parameters=[
+            openapi.Parameter(
+                "token",
+                openapi.IN_QUERY,
+                description="Password reset token.",
+                required=True,
+                type=openapi.TYPE_STRING,
+            )
+        ],
+        request_body=PasswordResetRequestSerializer,
+        responses={
+            200: MessageResponseSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
     def post(self, request):
         token = request.query_params.get("token")
         new_password = request.data.get("password")

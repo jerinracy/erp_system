@@ -9,6 +9,18 @@ class Order(TenantAwareModel):
     def __str__(self):
         return f"Order {self.id}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "-created_at"],
+                name="order_tenant_created_idx",
+            ),
+            models.Index(
+                fields=["tenant", "created_at"],
+                name="order_tenant_date_idx",
+            ),
+        ]
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
@@ -19,3 +31,11 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} ({self.quantity})"
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["order", "product"],
+                name="orderitem_order_product_idx",
+            ),
+        ]

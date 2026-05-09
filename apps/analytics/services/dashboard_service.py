@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.utils import timezone
 
 from apps.inventory.models import Product
@@ -8,23 +8,25 @@ from apps.sales.models import Order
 
 
 def get_dashboard_data(tenant):
-    today = timezone.now().date()
+    today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
     last_7_days = today - timedelta(days=7)
 
     # 🔹 total sales
-    total_sales = (
-        Order.objects.filter(tenant=tenant).aggregate(total=Sum("total_amount"))[
-            "total"
-        ]
-        or 0
+    totals = Order.objects.filter(tenant=tenant).aggregate(
+        total_sales=Sum("total_amount"),
+        total_orders=Count("id"),
     )
-
-    # 🔹 total orders
-    total_orders = Order.objects.filter(tenant=tenant).count()
+    total_sales = totals["total_sales"] or 0
+    total_orders = totals["total_orders"]
 
     # 🔹 today sales
     today_sales = (
-        Order.objects.filter(tenant=tenant, created_at__date=today).aggregate(
+        Order.objects.filter(
+            tenant=tenant,
+            created_at__gte=today,
+            created_at__lt=tomorrow,
+        ).aggregate(
             total=Sum("total_amount")
         )["total"]
         or 0
@@ -33,7 +35,9 @@ def get_dashboard_data(tenant):
     # 🔹 last 7 days sales
     weekly_sales = (
         Order.objects.filter(
-            tenant=tenant, created_at__date__gte=last_7_days
+            tenant=tenant,
+            created_at__gte=last_7_days,
+            created_at__lt=tomorrow,
         ).aggregate(total=Sum("total_amount"))["total"]
         or 0
     )

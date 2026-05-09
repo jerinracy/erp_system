@@ -11,8 +11,9 @@ MAX_RETRIES = 5
 def retry_failed_webhooks():
     now = timezone.now()
 
-    failed_tasks = FailedWebhook.objects.filter(
-        status="pending", next_retry_at__lte=now
+    failed_tasks = FailedWebhook.objects.select_related("webhook").filter(
+        status="pending",
+        next_retry_at__lte=now,
     )
 
     for task in failed_tasks:
@@ -21,7 +22,7 @@ def retry_failed_webhooks():
 
             if response.status_code < 400:
                 task.status = "success"
-                task.save()
+                task.save(update_fields=["status"])
                 continue
 
             raise Exception(f"Bad response: {response.status_code}")
@@ -37,4 +38,11 @@ def retry_failed_webhooks():
                 delay = 2**task.attempts
                 task.next_retry_at = now + timedelta(minutes=delay)
 
-            task.save()
+            task.save(
+                update_fields=[
+                    "attempts",
+                    "last_error",
+                    "next_retry_at",
+                    "status",
+                ]
+            )

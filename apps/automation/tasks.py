@@ -17,7 +17,7 @@ from apps.notifications.email_service import (
 @shared_task(bind=True, max_retries=3)
 def process_event_task(self, event_id):
     try:
-        event = Event.objects.get(id=event_id)
+        event = Event.objects.select_related("tenant").get(id=event_id)
         process_event(event)
 
     except Exception as e:
@@ -28,10 +28,13 @@ def process_event_task(self, event_id):
 def notify_expiring_subscriptions():
 
     target_date = timezone.now() + timedelta(days=3)
+    target_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    target_end = target_start + timedelta(days=1)
 
-    subscriptions = Subscription.objects.filter(
+    subscriptions = Subscription.objects.select_related("tenant").filter(
         status="active",
-        end_date__date=target_date.date(),
+        end_date__gte=target_start,
+        end_date__lt=target_end,
         notified_before_expiry=False,
     )
 
@@ -46,13 +49,13 @@ def notify_expiring_subscriptions():
 
         subscription.notified_before_expiry = True
 
-        subscription.save()
+        subscription.save(update_fields=["notified_before_expiry", "updated_at"])
 
 
 @shared_task
 def expire_subscriptions():
 
-    subscriptions = Subscription.objects.filter(
+    subscriptions = Subscription.objects.select_related("tenant").filter(
         status="active",
         end_date__lt=timezone.now(),
     )

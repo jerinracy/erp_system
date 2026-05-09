@@ -24,7 +24,7 @@ def activate_subscription(payment):
     )
 
     tenant.status = "active"
-    tenant.save()
+    tenant.save(update_fields=["status", "updated_at"])
 
     return subscription
 
@@ -32,9 +32,9 @@ def activate_subscription(payment):
 def expire_subscription(subscription: Subscription):
 
     subscription.status = "expired"
-    subscription.save()
+    subscription.save(update_fields=["status", "updated_at"])
 
     tenant: Tenant = subscription.tenant
 
     tenant.status = "inactive"
-    tenant.save()
+    tenant.save(update_fields=["status", "updated_at"])

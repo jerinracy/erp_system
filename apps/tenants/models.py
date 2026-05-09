@@ -31,10 +31,15 @@ class Tenant(TimeStampedModel):
 
     @property
     def active_subscription(self):
-        return self.subscriptions.filter(
-            status="active",
-            end_date__gt=timezone.now()
-        ).order_by("-end_date").first()
+        return (
+            self.subscriptions.filter(
+                status="active",
+                end_date__gt=timezone.now(),
+            )
+            .select_related("plan")
+            .order_by("-end_date")
+            .first()
+        )
 
     @property
     def is_subscription_active(self):

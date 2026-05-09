@@ -5,7 +5,7 @@
 ![Redis](https://img.shields.io/badge/Redis-Broker-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 ![Celery](https://img.shields.io/badge/Celery-Task_Queue-37814A?style=for-the-badge&logo=celery&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-Auth-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 # ERP System
 
 Backend for a **multi-tenant ERP platform**: organizations (**tenants**) onboard through registration (including a time-limited **trial subscription**), manage **inventory** and **sales**, connect **integrations** (API keys and webhooks), run **automation** when business events occur, review **analytics**, and manage **billing** via **SSLCommerz** (subscription plans and payments). The API is built with **Django** and **Django REST Framework**, uses **JWT** for authenticated tenant users, and uses **Celery** with **Redis** for background work such as rule processing, subscription expiry, and notifications.

@@ -1,8 +1,17 @@
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
 from core.views import ERPAPIView
+from core.swagger import (
+    ErrorResponseSerializer,
+    InvoiceSerializer,
+    OrderCreateResponseSerializer,
+    OrderDetailSerializer,
+    OrderSummarySerializer,
+)
 
 from .models import Order
 from .serializers import OrderItemInputSerializer
@@ -10,6 +19,15 @@ from .services.order_service import create_order
 
 
 class OrderCreateView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Create order",
+        request_body=OrderItemInputSerializer(many=True),
+        responses={
+            201: OrderCreateResponseSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Sales"],
+    )
     def post(self, request):
         serializer = OrderItemInputSerializer(data=request.data, many=True)
 
@@ -32,10 +50,15 @@ class OrderCreateView(ERPAPIView):
 
 
 class OrderListView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="List orders",
+        responses={200: OrderSummarySerializer(many=True)},
+        tags=["Sales"],
+    )
     def get(self, request):
-        orders = Order.objects.filter(
-            tenant=request.user.tenant
-        ).order_by("-created_at")
+        orders = Order.objects.filter(tenant=request.user.tenant).order_by(
+            "-created_at"
+        )
 
         data = []
 
@@ -53,6 +76,31 @@ class PublicOrderCreateView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="Create public order",
+        operation_description=(
+            "Create an order with an integration API key. Send the key in the "
+            "X-API-KEY header."
+        ),
+        manual_parameters=[
+            openapi.Parameter(
+                "X-API-KEY",
+                openapi.IN_HEADER,
+                description="Active integration API key.",
+                required=True,
+                type=openapi.TYPE_STRING,
+            )
+        ],
+        request_body=OrderItemInputSerializer(many=True),
+        responses={
+            201: OrderCreateResponseSerializer,
+            400: ErrorResponseSerializer,
+            401: ErrorResponseSerializer,
+            403: ErrorResponseSerializer,
+            429: ErrorResponseSerializer,
+        },
+        tags=["Public API"],
+    )
     def post(self, request):
         # 🔥 must come from middleware
         if not hasattr(request, "tenant"):
@@ -89,11 +137,19 @@ class PublicOrderCreateView(APIView):
 
 
 class OrderDetailView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Get order",
+        responses={
+            200: OrderDetailSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Sales"],
+    )
     def get(self, request, pk):
         try:
-            order = Order.objects.get(
-                id=pk,
-                tenant=request.user.tenant
+            order = (
+                Order.objects.prefetch_related("items__product")
+                .get(id=pk, tenant=request.user.tenant)
             )
         except Order.DoesNotExist:
             return Response({"error": "Order not found"}, status=404)
@@ -117,11 +173,19 @@ class OrderDetailView(ERPAPIView):
 
 
 class InvoiceView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Get order invoice",
+        responses={
+            200: InvoiceSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Sales"],
+    )
     def get(self, request, pk):
         try:
-            order = Order.objects.get(
-                id=pk,
-                tenant=request.user.tenant
+            order = (
+                Order.objects.prefetch_related("items__product")
+                .get(id=pk, tenant=request.user.tenant)
             )
         except Order.DoesNotExist:
             return Response({"error": "Order not found"}, status=404)

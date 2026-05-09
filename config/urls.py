@@ -25,7 +25,12 @@ schema_view = get_schema_view(
     openapi.Info(
         title="ERP API",
         default_version="v1",
-        description="API documentation for ERP system",
+        description=(
+            "API documentation for the multi-tenant ERP system. Authenticated "
+            "endpoints use JWT bearer tokens; public sales endpoints use "
+            "X-API-KEY."
+        ),
+        license=openapi.License(name="MIT License"),
     ),
     public=True,
     permission_classes=[permissions.AllowAny],
@@ -41,8 +46,11 @@ urlpatterns = [
     path("api/automation/", include("apps.automation.urls")),
     path("api/analytics/", include("apps.analytics.urls")),
     path("api/billing/", include("apps.billing.urls")),
-    # Swagger UI
+    path(
+        "swagger.json",
+        schema_view.without_ui(cache_timeout=0),
+        name="schema-json",
+    ),
     path("swagger/", schema_view.with_ui("swagger", cache_timeout=0)),
-    # Redoc (optional, cleaner UI)
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0)),
 ]

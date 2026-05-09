@@ -16,6 +16,14 @@ class Event(models.Model):
     def __str__(self):
         return f"{self.event_type} - {self.tenant.name}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "event_type", "-created_at"],
+                name="event_tenant_type_created_idx",
+            ),
+        ]
+
 
 class Rule(models.Model):
     tenant = models.ForeignKey("tenants.Tenant", on_delete=models.CASCADE)
@@ -37,3 +45,15 @@ class Rule(models.Model):
 
     def __str__(self):
         return f"{self.event_type} → {self.action}"
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "event_type", "is_active"],
+                name="rule_tenant_type_active_idx",
+            ),
+            models.Index(
+                fields=["tenant", "event_type", "action"],
+                name="rule_tenant_type_action_idx",
+            ),
+        ]

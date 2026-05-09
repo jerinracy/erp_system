@@ -41,18 +41,27 @@ def calculate_profit(tenant):
 
 
 def sales_growth(tenant):
-    today = timezone.now().date()
+    today = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
 
     today_sales = (
-        Order.objects.filter(tenant=tenant, created_at__date=today).aggregate(
+        Order.objects.filter(
+            tenant=tenant,
+            created_at__gte=today,
+            created_at__lt=tomorrow,
+        ).aggregate(
             total=Sum("total_amount")
         )["total"]
         or 0
     )
 
     yesterday_sales = (
-        Order.objects.filter(tenant=tenant, created_at__date=yesterday).aggregate(
+        Order.objects.filter(
+            tenant=tenant,
+            created_at__gte=yesterday,
+            created_at__lt=today,
+        ).aggregate(
             total=Sum("total_amount")
         )["total"]
         or 0

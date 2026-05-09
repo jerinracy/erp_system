@@ -1,14 +1,25 @@
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 
 from core.views import ERPAPIView
+from core.swagger import ErrorResponseSerializer
 
 from .models import Rule
 from .serializers import RuleSerializer
 
 
 class RuleCreateView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Create automation rule",
+        request_body=RuleSerializer,
+        responses={
+            201: RuleSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Automation"],
+    )
     def post(self, request):
-        serializer = RuleSerializer(data=request.data)
+        serializer = RuleSerializer(data=request.data, context={"request": request})
 
         if serializer.is_valid():
             rule = serializer.save(tenant=request.user.tenant)
@@ -18,6 +29,11 @@ class RuleCreateView(ERPAPIView):
 
 
 class RuleListView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="List automation rules",
+        responses={200: RuleSerializer(many=True)},
+        tags=["Automation"],
+    )
     def get(self, request):
         rules = Rule.objects.filter(tenant=request.user.tenant)
         serializer = RuleSerializer(rules, many=True)
@@ -25,13 +41,25 @@ class RuleListView(ERPAPIView):
 
 
 class RuleUpdateView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Update automation rule",
+        request_body=RuleSerializer,
+        responses={
+            200: RuleSerializer,
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Automation"],
+    )
     def put(self, request, pk):
         try:
             rule = Rule.objects.get(id=pk, tenant=request.user.tenant)
         except Rule.DoesNotExist:
             return Response({"error": "Rule not found"}, status=404)
 
-        serializer = RuleSerializer(rule, data=request.data, partial=True)
+        serializer = RuleSerializer(
+            rule, data=request.data, partial=True, context={"request": request}
+        )
 
         if serializer.is_valid():
             serializer.save()
@@ -41,6 +69,14 @@ class RuleUpdateView(ERPAPIView):
 
 
 class RuleDeleteView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Delete automation rule",
+        responses={
+            204: "Rule deleted.",
+            404: ErrorResponseSerializer,
+        },
+        tags=["Automation"],
+    )
     def delete(self, request, pk):
         try:
             rule = Rule.objects.get(id=pk, tenant=request.user.tenant)

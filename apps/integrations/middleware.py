@@ -37,7 +37,10 @@ class APIKeyMiddleware:
                 return JsonResponse({"error": "Unauthorized"}, status=401)  # changed message
 
             try:
-                key_obj = APIKey.objects.get(key=api_key, is_active=True)
+                key_obj = APIKey.objects.select_related("tenant").get(
+                    key=api_key,
+                    is_active=True,
+                )
             except APIKey.DoesNotExist:
                 return JsonResponse({"error": "Unauthorized"}, status=401)  # hide reason
 

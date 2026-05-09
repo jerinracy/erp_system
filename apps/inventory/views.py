@@ -1,13 +1,24 @@
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework import status
 
 from core.views import ERPAPIView
+from core.swagger import ErrorResponseSerializer
 
 from .models import Product
 from .serializers import ProductSerializer
 
 
 class ProductCreateView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Create product",
+        request_body=ProductSerializer,
+        responses={
+            201: ProductSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Inventory"],
+    )
     def post(self, request):
         serializer = ProductSerializer(data=request.data, context={"request": request})
 
@@ -19,11 +30,19 @@ class ProductCreateView(ERPAPIView):
 
 
 class ProductDetailView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Get product",
+        responses={
+            200: ProductSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Inventory"],
+    )
     def get(self, request, pk):
         try:
-            product = Product.objects.get(
+            product = Product.objects.select_related("category").get(
                 id=pk,
-                tenant=request.user.tenant
+                tenant=request.user.tenant,
             )
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -33,18 +52,36 @@ class ProductDetailView(ERPAPIView):
 
 
 class ProductListView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="List products",
+        responses={200: ProductSerializer(many=True)},
+        tags=["Inventory"],
+    )
     def get(self, request):
-        products = Product.objects.filter(tenant=request.user.tenant)  # Filter products by tenant
+        products = Product.objects.filter(tenant=request.user.tenant).select_related(
+            "category"
+        )
         serializer = ProductSerializer(products, many=True)
         return Response(serializer.data)
 
 
 class ProductUpdateView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Update product",
+        operation_description="Partially update a product owned by the current tenant.",
+        request_body=ProductSerializer,
+        responses={
+            200: ProductSerializer,
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Inventory"],
+    )
     def put(self, request, pk):
         try:
-            product = Product.objects.get(
+            product = Product.objects.select_related("category").get(
                 id=pk,
-                tenant=request.user.tenant
+                tenant=request.user.tenant,
             )
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -59,11 +96,19 @@ class ProductUpdateView(ERPAPIView):
 
 
 class ProductDeleteView(ERPAPIView):
+    @swagger_auto_schema(
+        operation_summary="Delete product",
+        responses={
+            204: "Product deleted.",
+            404: ErrorResponseSerializer,
+        },
+        tags=["Inventory"],
+    )
     def delete(self, request, pk):
         try:
             product = Product.objects.get(
                 id=pk,
-                tenant=request.user.tenant
+                tenant=request.user.tenant,
             )
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)

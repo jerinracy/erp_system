@@ -1,10 +1,20 @@
 import uuid
 
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.views import AuthenticatedAPIView
+from core.swagger import (
+    ErrorResponseSerializer,
+    PaymentCallbackRequestSerializer,
+    PaymentCallbackResponseSerializer,
+    PaymentCreateRequestSerializer,
+    PaymentCreateResponseSerializer,
+    PaymentHistorySerializer,
+    SubscriptionPlanSerializer,
+)
 
 from .models import Payment, SubscriptionPlan
 from .services import activate_subscription
@@ -19,6 +29,11 @@ def get_gateway_response_data(request):
 
 
 class SubscriptionPlanListView(AuthenticatedAPIView):
+    @swagger_auto_schema(
+        operation_summary="List subscription plans",
+        responses={200: SubscriptionPlanSerializer(many=True)},
+        tags=["Billing"],
+    )
     def get(self, request):
         plans = SubscriptionPlan.objects.filter(is_active=True)
 
@@ -37,6 +52,19 @@ class SubscriptionPlanListView(AuthenticatedAPIView):
 
 
 class PaymentCreateView(AuthenticatedAPIView):
+    @swagger_auto_schema(
+        operation_summary="Create subscription payment",
+        operation_description=(
+            "Create a pending payment for an active plan and return the "
+            "SSLCommerz gateway URL."
+        ),
+        request_body=PaymentCreateRequestSerializer,
+        responses={
+            200: PaymentCreateResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Billing"],
+    )
     def post(self, request):
         plan_id = request.data.get("plan_id")
 
@@ -61,7 +89,7 @@ class PaymentCreateView(AuthenticatedAPIView):
         response = create_ssl_payment(payment, request)
 
         payment.gateway_response = response
-        payment.save()
+        payment.save(update_fields=["gateway_response", "updated_at"])
 
         return Response({
             "payment_id": payment.id,
@@ -72,10 +100,17 @@ class PaymentCreateView(AuthenticatedAPIView):
 
 
 class PaymentHistoryView(AuthenticatedAPIView):
+    @swagger_auto_schema(
+        operation_summary="List payment history",
+        responses={200: PaymentHistorySerializer(many=True)},
+        tags=["Billing"],
+    )
     def get(self, request):
-        payments = Payment.objects.filter(
-            tenant=request.user.tenant
-        ).order_by("-created_at")
+        payments = (
+            Payment.objects.filter(tenant=request.user.tenant)
+            .select_related("plan")
+            .order_by("-created_at")
+        )
 
         data = []
 
@@ -96,18 +131,29 @@ class SSLCommerzSuccessView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="SSLCommerz success callback",
+        request_body=PaymentCallbackRequestSerializer,
+        responses={
+            200: PaymentCallbackResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Billing"],
+    )
     def post(self, request):
         transaction_id = request.data.get("tran_id")
         gateway_response = get_gateway_response_data(request)
 
         try:
-            payment = Payment.objects.get(transaction_id=transaction_id)
+            payment = Payment.objects.select_related("tenant", "plan").get(
+                transaction_id=transaction_id
+            )
         except Payment.DoesNotExist:
             return Response({"error": "Payment not found"}, status=404)
 
         payment.status = "success"
         payment.gateway_response = gateway_response
-        payment.save()
+        payment.save(update_fields=["status", "gateway_response", "updated_at"])
 
         activate_subscription(payment)
 
@@ -121,6 +167,15 @@ class SSLCommerzFailedView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="SSLCommerz failed callback",
+        request_body=PaymentCallbackRequestSerializer,
+        responses={
+            200: PaymentCallbackResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Billing"],
+    )
     def post(self, request):
         transaction_id = request.data.get("tran_id")
         gateway_response = get_gateway_response_data(request)
@@ -132,7 +187,7 @@ class SSLCommerzFailedView(APIView):
 
         payment.status = "failed"
         payment.gateway_response = gateway_response
-        payment.save()
+        payment.save(update_fields=["status", "gateway_response", "updated_at"])
 
         return Response({
             "message": "Payment failed",
@@ -144,6 +199,15 @@ class SSLCommerzCancelView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @swagger_auto_schema(
+        operation_summary="SSLCommerz cancel callback",
+        request_body=PaymentCallbackRequestSerializer,
+        responses={
+            200: PaymentCallbackResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Billing"],
+    )
     def post(self, request):
         transaction_id = request.data.get("tran_id")
         gateway_response = get_gateway_response_data(request)
@@ -155,7 +219,7 @@ class SSLCommerzCancelView(APIView):
 
         payment.status = "failed"
         payment.gateway_response = gateway_response
-        payment.save()
+        payment.save(update_fields=["status", "gateway_response", "updated_at"])
 
         return Response({
             "message": "Payment cancelled",

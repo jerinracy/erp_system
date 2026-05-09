@@ -25,6 +25,11 @@ class SubscriptionPlan(TimeStampedModel):
     def __str__(self):
         return self.name
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["is_active"], name="plan_active_idx"),
+        ]
+
 
 class Subscription(TimeStampedModel):
 
@@ -70,6 +75,19 @@ class Subscription(TimeStampedModel):
             f"{self.plan.name}"
         )
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "-end_date"],
+                name="sub_tenant_status_end_idx",
+            ),
+            models.Index(fields=["status", "end_date"], name="sub_status_end_idx"),
+            models.Index(
+                fields=["status", "notified_before_expiry", "end_date"],
+                name="sub_notify_expiry_idx",
+            ),
+        ]
+
 
 class Payment(TimeStampedModel):
 
@@ -112,3 +130,11 @@ class Payment(TimeStampedModel):
 
     def __str__(self):
         return self.transaction_id
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "-created_at"],
+                name="payment_tenant_created_idx",
+            ),
+        ]

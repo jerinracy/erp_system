@@ -23,15 +23,39 @@ class APIKey(models.Model):
     def __str__(self):
         return f"{self.name} - {self.tenant.name}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "is_active"],
+                name="apikey_tenant_active_idx",
+            ),
+        ]
+
 
 class APIKeyUsage(models.Model):
     api_key = models.ForeignKey(APIKey, on_delete=models.CASCADE)
     timestamp = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["api_key", "timestamp"],
+                name="apikeyusage_key_time_idx",
+            ),
+        ]
+
 
 class IPRequestLog(models.Model):
     ip_address = models.CharField(max_length=100)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["ip_address", "timestamp"],
+                name="iplog_ip_time_idx",
+            ),
+        ]
 
 
 class Webhook(models.Model):
@@ -54,6 +78,14 @@ class Webhook(models.Model):
 
     def __str__(self):
         return f"{self.tenant.name} - {self.event}"
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["tenant", "event", "is_active"],
+                name="webhook_tenant_event_idx",
+            ),
+        ]
 
 
 class FailedWebhook(models.Model):
@@ -81,3 +113,11 @@ class FailedWebhook(models.Model):
 
     def __str__(self):
         return f"{self.webhook.url} - {self.status}"
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["status", "next_retry_at"],
+                name="failedwh_status_retry_idx",
+            ),
+        ]
