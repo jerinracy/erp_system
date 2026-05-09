@@ -1,6 +1,14 @@
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-5.x-092E20?style=for-the-badge&logo=django&logoColor=white)
+![DRF](https://img.shields.io/badge/DRF-REST_Framework-red?style=for-the-badge&logo=django&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-Broker-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-Task_Queue-37814A?style=for-the-badge&logo=celery&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-Auth-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 # ERP System
 
-Backend for a **multi-tenant ERP platform**: organizations (**tenants**) onboard through registration, manage **inventory** and **sales**, connect **integrations** (API keys and webhooks), run **automation** when business events occur, and review **analytics**. The API is built with **Django** and **Django REST Framework**, uses **JWT** for authenticated tenant users, and uses **Celery** with **Redis** for background work such as rule processing and notifications.
+Backend for a **multi-tenant ERP platform**: organizations (**tenants**) onboard through registration (including a time-limited **trial subscription**), manage **inventory** and **sales**, connect **integrations** (API keys and webhooks), run **automation** when business events occur, review **analytics**, and manage **billing** via **SSLCommerz** (subscription plans and payments). The API is built with **Django** and **Django REST Framework**, uses **JWT** for authenticated tenant users, and uses **Celery** with **Redis** for background work such as rule processing, subscription expiry, and notifications.
 
 **Repository**
 
@@ -24,6 +32,7 @@ cd erp_system
 | Broker & results | Redis |
 | Configuration | python-dotenv (`.env`) |
 | Outbound HTTP | requests (webhooks, SMS provider) |
+| Payments | SSLCommerz (`sslcommerz-lib`; subscription checkout) |
 | Images | Pillow (tenant logo `ImageField`) |
 
 ---
@@ -69,6 +78,15 @@ cd erp_system
 - Dashboard-style aggregates: sales totals, order counts, time-bucketed revenue, low-stock signals.
 - Additional endpoints for top products, profit-style rollups, growth metrics, and chart-oriented series.
 
+### Billing & subscriptions (`apps.billing`)
+
+- **Subscription plans** (admin-managed): name, price, duration in days, max users, active flag.
+- **Registration** creates a **Trial** plan subscription (default **7 days**) so new tenants can use the product immediately.
+- **Payments** through **SSLCommerz**: authenticated users start a session (`gateway_url`), complete checkout at the gateway; success activates or renews the tenant subscription and sets tenant status to **active**. Failed or cancelled payments are recorded without extending access.
+- **Payment history** per tenant (amount, status, plan name, transaction id).
+- **Access control:** inventory, sales (JWT routes), integrations, automation, and analytics require an **active** subscription (`end_date` in the future, status **active**). **Superusers** bypass this check. **Tenant profile** and **billing** endpoints remain available with JWT alone so expired organizations can update company details and purchase a plan. The **public order API** (`X-API-KEY`) also requires an active subscription for the key’s tenant.
+- **Celery Beat** runs daily tasks: notify subscriptions expiring in three days (email to `owner_email`), and expire overdue subscriptions (tenant status **inactive**).
+
 ### Notifications (`apps.notifications`)
 
 - Shared email utilities used by authentication flows and automation-driven messages.
@@ -78,7 +96,7 @@ cd erp_system
 - **Django Admin** for staff-facing data management.
 - Optional **`apps/hr`** package exists in the repository; wire it into `INSTALLED_APPS` when you extend the system with HR features.
 
-Endpoint-level contract notes for client applications are documented in [`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md).
+Endpoint-level contract notes for client applications are in [`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md); [`doc/FRONTEND_REQUIREMENTS.md`](doc/FRONTEND_REQUIREMENTS.md) points to the same document.
 
 ---
 
@@ -148,7 +166,17 @@ DEFAULT_FROM_EMAIL=you@example.com
 SMS_API_KEY=
 ```
 
-Ensure application URLs in email templates match your deployment by setting **`BASE_URL`** (or equivalent) in the appropriate settings module for each environment.
+**SSLCommerz (billing; required for paid checkout in non-sandbox only if you enable real charges)**
+
+```env
+SSLCOMMERZ_STORE_ID=
+SSLCOMMERZ_STORE_PASSWORD=
+SSLCOMMERZ_IS_SANDBOX=True
+```
+
+Use sandbox credentials while developing; set `SSLCOMMERZ_IS_SANDBOX=False` with live keys only in controlled production environments.
+
+Ensure application URLs in email templates match your deployment by setting **`BASE_URL`** (or equivalent) in the appropriate settings module for each environment. Payment **success, fail, and cancel** callback URLs are derived from the incoming HTTP host when creating a session, so the app must be reachable by SSLCommerz at that host (use a public URL or tunnel for end-to-end gateway tests).
 
 ### 5. Create the database
 
@@ -192,7 +220,11 @@ In a separate shell, with the same virtual environment and working directory:
 celery -A config worker -l info
 ```
 
-Use Celery Beat only after you define periodic tasks in the project.
+Run **Celery Beat** in another process if you rely on scheduled tasks (this project schedules **subscription expiry** and **expiry reminder** emails):
+
+```bash
+celery -A config beat -l info
+```
 
 ### 10. Webhook retries (when using integrations)
 
@@ -235,11 +267,14 @@ apps/
   integrations/       # API keys, webhooks, retries
   automation/         # Events, rules, Celery tasks
   analytics/          # Reporting and dashboards
+  billing/            # Subscription plans, payments, SSLCommerz
   notifications/      # Email helpers
   hr/                 # Optional; enable in INSTALLED_APPS when used
 core/                 # Shared model utilities
 docs/
   FRONTEND_REQUIREMENTS.md
+doc/
+  FRONTEND_REQUIREMENTS.md  # entry point → see docs/
 manage.py
 requirements.txt
 ```

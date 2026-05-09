@@ -12,7 +12,7 @@ This document maps **features → pages/UI → HTTP endpoints → payloads** so 
 
 | Mechanism | When to use |
 |-----------|----------------|
-| **JWT Bearer** | All tenant dashboard endpoints under `/api/inventory/`, `/api/sales/` (non-public), `/api/tenants/`, `/api/integrations/`, `/api/automation/`, `/api/analytics/`, and authenticated `/api/auth/*`. |
+| **JWT Bearer** | Authenticated `/api/auth/*`, `/api/tenants/`, `/api/billing/*`, and—when the tenant has an **active subscription**—`/api/inventory/`, `/api/sales/` (non-public), `/api/integrations/`, `/api/automation/`, `/api/analytics/`. |
 | **Header** | `Authorization: Bearer <access_token>` |
 | **Token pair** | Obtained from `POST /api/auth/login/`. The backend uses **email** as the username field (`USERNAME_FIELD`), not `username`. |
 | **No cookie session** | Unless you add session auth, treat the API as **stateless JWT**. |
@@ -29,6 +29,15 @@ This document maps **features → pages/UI → HTTP endpoints → payloads** so 
 
 - After login, every authenticated request is scoped to **`request.user.tenant`** on the server.
 - The client does **not** send `tenant_id` in headers for normal operations; the backend derives it from the user (except public API key flow, where tenant comes from the key).
+
+### Subscription gating (ERP features)
+
+- **Active subscription** means the tenant has at least one `Subscription` with `status === "active"` and `end_date` in the future. **Superusers** skip this check.
+- Endpoints under **inventory, sales (JWT), integrations, automation, and analytics** use `ERPAPIView` and return **`403`** with message **`Subscription expired`** when there is no active subscription.
+- **`/api/tenants/*`** profile and delete-request routes use authentication only (no subscription check) so users can fix company details or subscribe after expiry.
+- **`/api/billing/*`** uses `AuthenticatedAPIView` only—**expired tenants can list plans, create payments, and view payment history** to renew.
+- **`POST /api/sales/public/orders/`** returns **`403`** `{ "error": "Subscription expired" }` if the API key’s tenant has no active subscription.
+- **Login response** includes a **`subscription`** summary (see A2) so the SPA can show status, plan name, and expiry without an extra call.
 
 ### Content type
 
@@ -86,7 +95,7 @@ Responses are not fully normalized; handle all of these:
 | **Success** | `201` — `{ "message": "Company registered" }` |
 | **Errors** | `400` — validation errors on fields |
 
-**Notes:** Server creates `Tenant`, `User` (role `admin`), sends verification email asynchronously (email configuration must be valid in environment).
+**Notes:** Server creates `Tenant` (status **`active`**), `User` (role `admin`), a **7-day trial** `Subscription` linked to a **Trial** plan (`get_or_create` by name, price `0`, `max_users` 3 unless already changed in DB), and sends verification email asynchronously (email configuration must be valid in environment).
 
 #### A2 — Login (JWT)
 
@@ -99,7 +108,11 @@ Responses are not fully normalized; handle all of these:
 **Success `200`:** Body follows **djangorestframework-simplejwt** `TokenObtainPair` (typically includes at least):
 
 - `access` — short-lived JWT string  
-- `refresh` — refresh token string (if enabled in library defaults)
+- `refresh` — refresh token string (if enabled in library defaults)  
+- `subscription` — object added by the backend:  
+  - `is_active` — boolean (whether the tenant has a current active subscription window)  
+  - `plan` — string \| null (plan name, e.g. `"Trial"`, or `null` if none)  
+  - `expires_at` — ISO datetime string \| null (subscription `end_date`, or `null`)
 
 **Important:** This repository **does not** register a `POST /api/auth/token/refresh/` route. Plan either:
 
@@ -108,7 +121,9 @@ Responses are not fully normalized; handle all of these:
 
 **Errors:** `401` / `400` — invalid credentials or validation.
 
-**Backend note for alignment:** `urls.py` registers `login/` twice; the **first** handler wins (stock `TokenObtainPairView`). A custom serializer intended to block unverified users may not apply until the duplicate route is removed—**test with backend** whether unverified accounts can obtain tokens.
+**Unverified users:** Login uses `CustomTokenObtainPairView`; unverified accounts get validation error **`{ "error": "Verify your email first" }`** (no tokens).
+
+**After renewal:** Prefer re-login or another API read if you need an updated `subscription` summary in the client; the JWT claims do not carry subscription state.
 
 #### A3 — Verify email (link from email)
 
@@ -390,7 +405,7 @@ Array of objects (send as **JSON array** at root for `many=True` serializer):
 | **Auth** | Header `X-API-KEY: <key>` **only** |
 | **Body** | Same JSON array as D1 |
 | **Success** | `201` — `{ "message": "Order created", "order_id": int }` |
-| **Errors** | `401` — missing tenant context, missing key, or key inactive; `403` — key has `can_create_order: false`; `429` — rate limit (IP or key); `400` business/validation |
+| **Errors** | `401` — missing tenant context, missing key, or key inactive; `403` — key has `can_create_order: false` **or** tenant subscription expired (`{ "error": "Subscription expired" }`); `429` — rate limit (IP or key); `400` business/validation |
 
 **Rate limits (middleware):** Roughly **100 requests/minute per IP** and **100 requests/minute per API key** on this path (implementation detail; tune with backend).
 
@@ -603,11 +618,81 @@ When `order.created` fires, server payload includes at least: `order_id`, `total
 
 ---
 
-## Feature group H — Django admin (out of SPA scope)
+## Feature group H — Billing & subscriptions (SSLCommerz)
+
+**Product goal:** Show **active subscription plans**, start a **paid checkout** for the current tenant, and show **payment history**. Renewals replace the previous active subscription on successful payment. Currency for the gateway session is **BDT** (see `apps.billing.sslcommerz`).
+
+### Suggested pages
+
+| Page | Purpose |
+|------|---------|
+| Plans & subscribe | List plans; user picks one → create payment → redirect browser to `gateway_url`. |
+| Payment return | After gateway redirect, user lands on frontend routes you control; optionally poll payment history or re-login for updated `subscription`. |
+| Billing history | Table of past payments (status, amount, plan, date). |
+
+**UI:** If core ERP calls return **`403` `Subscription expired`**, deep-link to billing/plans.
+
+### Plan object (list)
+
+| Field | Type | Notes |
+|-------|------|--------|
+| `id` | number | |
+| `name` | string | |
+| `price` | decimal | Charged amount for this plan |
+| `duration_days` | number | Subscription length after successful payment |
+| `max_users` | number | Plan limit (informational for UI) |
+
+### Endpoints (JWT; subscription **not** required)
+
+#### H1 — List active subscription plans
+
+| | |
+|--|--|
+| **Method / path** | `GET /api/billing/plans/` |
+| **Auth** | Bearer JWT |
+| **Success** | `200` — JSON array of plan objects |
+
+#### H2 — Create payment session (SSLCommerz)
+
+| | |
+|--|--|
+| **Method / path** | `POST /api/billing/payment/create/` |
+| **Auth** | Bearer JWT |
+| **Body** | `{ "plan_id": number }` |
+| **Success** | `200` — `{ "payment_id", "transaction_id", "gateway_url", "gateway_response" }` — open **`gateway_url`** in the browser (or redirect) for checkout. `gateway_response` is the raw SSLCommerz session payload (useful for debugging). |
+| **Errors** | `404` — `{ "error": "Plan not found" }` if `plan_id` invalid or inactive |
+
+**Flow:** Server creates a `Payment` row (`pending`), calls SSLCommerz `createSession`, stores the response. Success/fail/cancel URLs point back to **`/api/billing/payment/success/`**, **`failed/`**, **`cancel/`** on the **same host** as the create request—use a publicly reachable base URL when testing with the real gateway.
+
+#### H3 — Payment history
+
+| | |
+|--|--|
+| **Method / path** | `GET /api/billing/payments/` |
+| **Auth** | Bearer JWT |
+| **Success** | `200` — array of `{ "id", "plan" (name string), "transaction_id", "amount", "status" ("pending"\|"success"\|"failed"), "created_at" }` newest first |
+
+### Gateway callbacks (not for SPA — SSLCommerz server / redirect)
+
+These accept **unauthenticated** `POST` (gateway posts form-like data; DRF parses `request.data`). The SPA does not call them.
+
+| Path | Role |
+|------|------|
+| `POST /api/billing/payment/success/` | Marks payment **success**, merges payload into `gateway_response`, runs **`activate_subscription`** (expires prior active subs for tenant, creates new active subscription, sets tenant `status` **active**). Body includes **`tran_id`** matching `transaction_id`. |
+| `POST /api/billing/payment/failed/` | Marks payment **failed**. |
+| `POST /api/billing/payment/cancel/` | Marks payment **failed** (cancelled). |
+
+**Success response:** `{ "message": "Payment successful", "transaction_id": "..." }` (and analogous messages for fail/cancel).
+
+---
+
+## Feature group I — Django admin (out of SPA scope)
 
 | Path | Purpose |
 |------|---------|
 | `GET/POST /admin/...` | Django admin UI for operators; not part of the JWT SPA unless you embed it (unusual). |
+
+**Operators** use admin to manage `SubscriptionPlan` rows (and other models) unless you build an internal console.
 
 ---
 
@@ -649,6 +734,12 @@ When `order.created` fires, server payload includes at least: `order_id`, `total
 | | GET | `/api/analytics/profit/` |
 | | GET | `/api/analytics/growth/` |
 | | GET | `/api/analytics/sales-chart/` |
+| **H Billing** | GET | `/api/billing/plans/` |
+| | POST | `/api/billing/payment/create/` |
+| | GET | `/api/billing/payments/` |
+| | POST | `/api/billing/payment/success/` |
+| | POST | `/api/billing/payment/failed/` |
+| | POST | `/api/billing/payment/cancel/` |
 
 ---
 
@@ -663,6 +754,7 @@ When `order.created` fires, server payload includes at least: `order_id`, `total
 | `/settings/integrations/api-keys`, `/settings/integrations/webhooks` | E |
 | `/automation/rules` | F |
 | `/analytics`, `/analytics/sales`, `/analytics/products`, `/analytics/profit` | G |
+| `/billing/plans`, `/billing/history` (and optional return/thank-you routes after gateway) | H |
 
 Adjust naming to your design system; routes are **frontend-only**—only the API paths in the table must match the backend.
 
