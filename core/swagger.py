@@ -26,7 +26,7 @@ class TokenSubscriptionSerializer(serializers.Serializer):
 class LoginResponseSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
-    subscription = TokenSubscriptionSerializer()
+    subscription = TokenSubscriptionSerializer(required=False)
 
 
 class TenantContextSerializer(serializers.Serializer):

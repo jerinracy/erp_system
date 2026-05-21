@@ -6,6 +6,8 @@ from .views import (
     RequestPasswordResetView,
     ResendVerificationView,
     ResetPasswordView,
+    SystemUserDetailView,
+    SystemUserListCreateView,
     TestTenantView,
     VerifyEmailView,
 )
@@ -24,4 +26,10 @@ urlpatterns = [
         "forgot-password/", RequestPasswordResetView.as_view(), name="forgot-password"
     ),
     path("reset-password/", ResetPasswordView.as_view(), name="reset-password"),
+    path("system-users/", SystemUserListCreateView.as_view(), name="system-users"),
+    path(
+        "system-users/<int:pk>/",
+        SystemUserDetailView.as_view(),
+        name="system-user-detail",
+    ),
 ]

@@ -21,7 +21,12 @@ from core.swagger import (
 )
 
 from .models import EmailVerification, PasswordReset
-from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer
+from .permissions import IsSystemAdmin
+from .serializers import (
+    CustomTokenObtainPairSerializer,
+    ManagedUserSerializer,
+    RegisterSerializer,
+)
 
 User = get_user_model()
 
@@ -32,8 +37,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     @swagger_auto_schema(
         operation_summary="Log in",
         operation_description=(
-            "Authenticate a verified user and return JWT tokens with current "
-            "subscription status."
+            "Authenticate a user and return JWT tokens. Tenant users must be "
+            "email verified and include current subscription status; system "
+            "users do not require email verification or subscriptions."
         ),
         request_body=CustomTokenObtainPairSerializer,
         responses={
@@ -125,12 +131,17 @@ class VerifyEmailView(APIView):
         if not verification.is_valid():
             return Response({"error": "Token expired or already used"}, status=400)
 
-        # ✅ mark used
+        user = verification.user
+
+        if not user.is_tenant_user:
+            return Response(
+                {"error": "Email verification is only for tenant users"},
+                status=400,
+            )
+
         verification.is_used = True
         verification.save()
 
-        # ✅ verify user
-        user = verification.user
         user.is_verified = True
         user.save()
 
@@ -154,6 +165,12 @@ class ResendVerificationView(APIView):
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
+
+        if not user.is_tenant_user:
+            return Response(
+                {"error": "Email verification is only for tenant users"},
+                status=400,
+            )
 
         if user.is_verified:
             return Response({"message": "Already verified"})
@@ -244,3 +261,128 @@ class ResetPasswordView(APIView):
         reset.save()
 
         return Response({"message": "Password reset successful"})
+
+
+class SystemUserListCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    managed_roles = [User.Role.MANAGER, User.Role.EMPLOYEE]
+
+    @swagger_auto_schema(
+        operation_summary="List system managers and employees",
+        responses={200: ManagedUserSerializer(many=True)},
+        tags=["Authentication"],
+    )
+    def get(self, request):
+        users = User.objects.filter(
+            user_type=User.UserType.SYSTEM,
+            role__in=self.managed_roles,
+        ).order_by("id")
+
+        serializer = ManagedUserSerializer(users, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_summary="Create system manager or employee",
+        request_body=ManagedUserSerializer,
+        responses={
+            201: ManagedUserSerializer,
+            400: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
+    def post(self, request):
+        serializer = ManagedUserSerializer(
+            data=request.data,
+            context={"allowed_roles": self.managed_roles},
+            allowed_roles=self.managed_roles,
+        )
+
+        if serializer.is_valid():
+            user = serializer.save(
+                user_type=User.UserType.SYSTEM,
+                tenant=None,
+                is_verified=True,
+            )
+            return Response(
+                ManagedUserSerializer(user).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SystemUserDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsSystemAdmin]
+
+    managed_roles = [User.Role.MANAGER, User.Role.EMPLOYEE]
+
+    def get_object(self, pk):
+        return User.objects.get(
+            pk=pk,
+            user_type=User.UserType.SYSTEM,
+            role__in=self.managed_roles,
+        )
+
+    @swagger_auto_schema(
+        operation_summary="Get system manager or employee",
+        responses={
+            200: ManagedUserSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
+    def get(self, request, pk):
+        try:
+            user = self.get_object(pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(ManagedUserSerializer(user).data)
+
+    @swagger_auto_schema(
+        operation_summary="Update system manager or employee",
+        request_body=ManagedUserSerializer,
+        responses={
+            200: ManagedUserSerializer,
+            400: ErrorResponseSerializer,
+            404: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
+    def put(self, request, pk):
+        try:
+            user = self.get_object(pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ManagedUserSerializer(
+            user,
+            data=request.data,
+            partial=True,
+            context={"allowed_roles": self.managed_roles},
+            allowed_roles=self.managed_roles,
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(
+        operation_summary="Delete system manager or employee",
+        responses={
+            204: "User deleted.",
+            404: ErrorResponseSerializer,
+        },
+        tags=["Authentication"],
+    )
+    def delete(self, request, pk):
+        try:
+            user = self.get_object(pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

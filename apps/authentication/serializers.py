@@ -33,7 +33,10 @@ class RegisterSerializer(serializers.Serializer):
             )
 
             user = User.objects.create_user(
-                **validated_data, tenant=tenant, role="admin"
+                **validated_data,
+                tenant=tenant,
+                role=User.Role.ADMIN,
+                user_type=User.UserType.TENANT,
             )
 
             verification = EmailVerification.objects.create(user=user)
@@ -69,25 +72,106 @@ class CustomTokenObtainPairSerializer(
 
         user = self.user
 
-        if not user.is_verified:
+        if user.is_tenant_user and not user.is_verified:
             raise serializers.ValidationError({
                 "error": "Verify your email first"
             })
 
         tenant = user.tenant
 
-        subscription = tenant.active_subscription
-
-        data["subscription"] = {
-            "is_active": bool(subscription),
-            "plan": (
-                subscription.plan.name
-                if subscription else None
-            ),
-            "expires_at": (
-                subscription.end_date
-                if subscription else None
-            ),
+        data["user"] = {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "user_type": user.user_type,
+            "tenant": tenant.id if tenant else None,
         }
 
+        if user.is_tenant_user:
+            subscription = tenant.active_subscription if tenant else None
+
+            data["subscription"] = {
+                "is_active": bool(subscription),
+                "plan": (
+                    subscription.plan.name
+                    if subscription else None
+                ),
+                "expires_at": (
+                    subscription.end_date
+                    if subscription else None
+                ),
+            }
+
         return data
+
+
+class ManagedUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "email",
+            "password",
+            "full_name",
+            "phone",
+            "role",
+            "user_type",
+            "tenant",
+            "is_active",
+            "is_verified",
+            "date_joined",
+        ]
+        read_only_fields = [
+            "id",
+            "user_type",
+            "tenant",
+            "is_verified",
+            "date_joined",
+        ]
+
+    def __init__(self, *args, allowed_roles=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if allowed_roles is not None:
+            self.fields["role"].choices = [
+                choice
+                for choice in User.Role.choices
+                if choice[0] in allowed_roles
+            ]
+
+    def validate_role(self, value):
+        allowed_roles = self.context.get("allowed_roles")
+
+        if allowed_roles and value not in allowed_roles:
+            raise serializers.ValidationError("This role cannot be managed here.")
+
+        return value
+
+    def validate_password(self, value):
+        if not value:
+            raise serializers.ValidationError("Password cannot be empty.")
+
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+
+        if not password:
+            raise serializers.ValidationError({"password": "Password is required."})
+
+        return User.objects.create_user(password=password, **validated_data)
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        if password:
+            instance.set_password(password)
+
+        instance.save()
+        return instance

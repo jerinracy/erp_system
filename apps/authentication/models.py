@@ -15,6 +15,12 @@ class UserManager(BaseUserManager):
             raise ValueError("Email is required")
 
         email = self.normalize_email(email)
+        extra_fields.setdefault(
+            "user_type",
+            User.UserType.TENANT
+            if extra_fields.get("tenant_id") or extra_fields.get("tenant")
+            else User.UserType.SYSTEM,
+        )
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save()
@@ -23,6 +29,8 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        extra_fields.setdefault("user_type", User.UserType.SYSTEM)
+        extra_fields.setdefault("role", User.Role.ADMIN)
 
         return self.create_user(email, password, **extra_fields)
 
@@ -35,13 +43,25 @@ class User(AbstractUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []  # no username required
 
-    ROLE_CHOICES = (
-        ("admin", "Admin"),
-        ("manager", "Manager"),
-        ("staff", "Staff"),
-    )
+    class UserType(models.TextChoices):
+        SYSTEM = "system", "System"
+        TENANT = "tenant", "Tenant"
+
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Admin"
+        MANAGER = "manager", "Manager"
+        EMPLOYEE = "employee", "Employee"
+
+    USER_TYPE_CHOICES = UserType.choices
+    ROLE_CHOICES = Role.choices
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="admin")
+    user_type = models.CharField(
+        max_length=20,
+        choices=USER_TYPE_CHOICES,
+        default=UserType.TENANT,
+        db_index=True,
+    )
 
     tenant = models.ForeignKey(
         "tenants.Tenant",
@@ -60,6 +80,14 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    @property
+    def is_system_user(self):
+        return self.user_type == self.UserType.SYSTEM
+
+    @property
+    def is_tenant_user(self):
+        return self.user_type == self.UserType.TENANT
 
 
 class EmailVerification(models.Model):

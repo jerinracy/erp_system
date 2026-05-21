@@ -109,7 +109,8 @@ Responses are not fully normalized; handle all of these:
 
 - `access` — short-lived JWT string  
 - `refresh` — refresh token string (if enabled in library defaults)  
-- `subscription` — object added by the backend:  
+- `user` — authenticated user summary, including `role`, `user_type`, and `tenant`
+- `subscription` — object added only for tenant users:  
   - `is_active` — boolean (whether the tenant has a current active subscription window)  
   - `plan` — string \| null (plan name, e.g. `"Trial"`, or `null` if none)  
   - `expires_at` — ISO datetime string \| null (subscription `end_date`, or `null`)
@@ -121,7 +122,7 @@ Responses are not fully normalized; handle all of these:
 
 **Errors:** `401` / `400` — invalid credentials or validation.
 
-**Unverified users:** Login uses `CustomTokenObtainPairView`; unverified accounts get validation error **`{ "error": "Verify your email first" }`** (no tokens).
+**Unverified tenant users:** Login uses `CustomTokenObtainPairView`; unverified tenant accounts get validation error **`{ "error": "Verify your email first" }`** (no tokens). System users do not require email verification and do not receive `subscription` in the login response.
 
 **After renewal:** Prefer re-login or another API read if you need an updated `subscription` summary in the client; the JWT claims do not carry subscription state.
 

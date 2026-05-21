@@ -46,6 +46,7 @@ urlpatterns = [
     path("api/automation/", include("apps.automation.urls")),
     path("api/analytics/", include("apps.analytics.urls")),
     path("api/billing/", include("apps.billing.urls")),
+    path("api/hr/", include("apps.hr.urls")),
     path(
         "swagger.json",
         schema_view.without_ui(cache_timeout=0),
